@@ -1,88 +1,113 @@
-/*
-main.c
-
+/**
 Aaron Knestaut
 Maria van Venrooy
 Cisc 210
 
-Final Pi Project - Bop It
+main.c
+
+Etch-a-sketch
+
+if you want to see the remains of what the project should of been
+and why this is late, take a look at oldMain.c
+oToo many segmentation faults to wrap our heads around, I guess
 */
 
-#include "framebuffer.h"
+#define _GNU_SOURCE
+#include <signal.h>
+#include <sense/sense.h>
 #include <time.h>
 #include <stdio.h>
 #include <unistd.h>
+#include <stdlib.h>
+#include <math.h>
+#include <linux/input.h>
 
+char run = 1;
+uint16_t color;
+int colorNum = 0;
+float x = 0;
+float y = 0;
+pi_framebuffer_t* framebuffer;
+float threshold = 1;
 
-//V Set pixel color
-//framebuffer->bitmap->pixel[a][b] = getColor(0, 0, 0);
-//V Pause for 1 second
-//sleep(1);
+/*
+handles interupting the function with a ctrl-c
+*/
+void interruptHandler(){
+    run = 0;
+}
 
+/*
+handles moving the light on the screen, and changing colors
+based on the joystick
+*/
+void callbackFn(unsigned int code){
+	switch(code){
+		case KEY_UP:
+			y=y==0?7:y-1;
+			break;
+		case KEY_DOWN:
+			y=y==7?0:y+1;
+			break;
+		case KEY_RIGHT:
+			x=x==7?0:x+1;
+			break;
+		case KEY_LEFT:
+			x=x==0?7:x-1;
+			break;
+		case KEY_ENTER:
+			if(colorNum == 0){
+				color = getColor(0, 0, 255);
+				colorNum = 1;
+			}
+			else if(colorNum == 1){
+				color = getColor(0, 255, 0);
+				colorNum = 2;
+			}
+			else if(colorNum == 2){
+				color = getColor(255, 0, 0);
+				colorNum = 0;
+			}
+			break;
+		default:
+			run=0;
+	}
+	setPixel(framebuffer->bitmap,x,y,color);
+}
 
-
+/*
+main function of the game, initallizes everything and 
+runs the main loop
+*/
 void main(){
+	signal(SIGINT, interruptHandler);
 
-	pi_framebuffer_t* framebuffer = getFBDevice();
-	
-	int score = 0;
-	int cont = 1;
-	int task = 0;
-	while(cont){
-		clearBitmap(framebuffer->bitmap,getColor(0, 0, 0));
-		
-		//random number -> which task
-		task = 
-		
-		//show color instruction
-		//check for task completion
-		//if task is failed, cont = 0
-		//if task completed, score++
+	//sets up all devices
+	framebuffer = getFBDevice();
+	pi_joystick_t* joystick = getJoystickDevice();
+	pi_i2c_t* device = geti2cDevice();
+	configureAccelGyro(device);
+	coordinate_t data;
 
+	color = getColor(255, 0, 0);
+	colorNum = 0;
+	setPixel(framebuffer->bitmap,0,0,color);
 
-		
-	}
+	while(run){
+		getAccelData(device, &data);
+		int x = fabs(data.x);
+		int y = fabs(data.y);
+		int z = fabs(data.z);
 
-	freeFrameBuffer(framebuffer);
-	return 0;
-
-	//display score
-	showScore(score);
-}
-
-void showScore (int score)
-{
-	//display score
-}
-
-
-void allRed () {
-	for (int i = 0; i < 8; i ++)
-	{
-		for (int j = 0; j < 8; j++)
-		{
-			framebuffer->bitap->pixel[i][j]= getColor(255,0,0);
+		if(x > threshold || y > threshold || z > threshold){
+			clearBitmap(framebuffer->bitmap,0);
 		}
+
+		pollJoystick(joystick, callbackFn, 1000);
 	}
-}
 
-void allGreen () {
-        for (int i = 0; i < 8; i ++)
-        {
-                for (int j = 0; j < 8; j++)
-                {
-                        framebuffer->bitap->pixel[i][j]= getColor(0,255,0);
-                }
-        }
+	clearBitmap(framebuffer->bitmap,0);
+	freeFrameBuffer(framebuffer);
+	freeJoystick(joystick);
+	freei2cDevice(device);
 }
-
-void allBlue () {
-        for (int i = 0; i < 8; i ++)
-        {
-                for (int j = 0; j < 8; j++)
-                {
-                        framebuffer->bitap->pixel[i][j]= getColor(0,0,255);
-                }
-        }
-}
-
